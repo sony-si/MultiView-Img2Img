@@ -44,17 +44,17 @@ def get_option_setter(dataset_name):
     return dataset_class.modify_commandline_options
 
 
-def create_dataset(opt):
+def create_dataset(opt, rank):
     """Create a dataset given the option.
 
     This function wraps the class CustomDatasetDataLoader.
         This is the main interface between this package and 'train.py'/'test.py'
 
     Example:
-        >>> from data import create_dataset
-        >>> dataset = create_dataset(opt)
+        # >>> from data import create_dataset
+        # >>> dataset = create_dataset(opt)
     """
-    data_loader = CustomDatasetDataLoader(opt)
+    data_loader = CustomDatasetDataLoader(opt, rank)
     dataset = data_loader.load_data()
     return dataset
 
@@ -62,7 +62,7 @@ def create_dataset(opt):
 class CustomDatasetDataLoader():
     """Wrapper class of Dataset class that performs multi-threaded data loading"""
 
-    def __init__(self, opt):
+    def __init__(self, opt, rank):
         """Initialize this class
 
         Step 1: create a dataset instance given the name [dataset_mode]
@@ -72,11 +72,20 @@ class CustomDatasetDataLoader():
         dataset_class = find_dataset_using_name(opt.dataset_mode)
         self.dataset = dataset_class(opt)
         print("dataset [%s] was created" % type(self.dataset).__name__)
+
+        if opt.isTrain:
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                self.dataset, rank=rank, num_replicas=len(opt.gpu_ids), shuffle=True)
+        else:
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                self.dataset, rank=rank, num_replicas=len(opt.gpu_ids), shuffle=False)
+
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
             batch_size=opt.batch_size,
-            shuffle=not opt.serial_batches,
-            num_workers=int(opt.num_threads))
+            shuffle=False,
+            num_workers=int(opt.num_threads),
+            sampler=sampler)
 
     def load_data(self):
         return self
@@ -89,5 +98,6 @@ class CustomDatasetDataLoader():
         """Return a batch of data"""
         for i, data in enumerate(self.dataloader):
             if i * self.opt.batch_size >= self.opt.max_dataset_size:
+                print(i)
                 break
             yield data

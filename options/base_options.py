@@ -1,7 +1,6 @@
 import argparse
 import os
 from util import util
-import torch
 import models
 import data
 
@@ -20,7 +19,6 @@ class BaseOptions():
     def initialize(self, parser):
         """Define the common options that are used in both training and test."""
         # basic parameters
-        parser.add_argument('--dataroot', required=True, help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
         parser.add_argument('--name', type=str, default='experiment_name', help='name of the experiment. It decides where to store samples and models')
         parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
@@ -38,22 +36,48 @@ class BaseOptions():
         parser.add_argument('--init_gain', type=float, default=0.02, help='scaling factor for normal, xavier and orthogonal.')
         parser.add_argument('--no_dropout', action='store_true', help='no dropout for the generator')
         # dataset parameters
-        parser.add_argument('--dataset_mode', type=str, default='unaligned', help='chooses how datasets are loaded. [unaligned | aligned | single | colorization]')
+        parser.add_argument('--dataset_mode', type=str, default='dual_view_unpaired', help='chooses how datasets are loaded. [dual_view_unpaired  | single ]')
         parser.add_argument('--direction', type=str, default='AtoB', help='AtoB or BtoA')
-        parser.add_argument('--serial_batches', action='store_true', help='if true, takes images in order to make batches, otherwise takes them randomly')
-        parser.add_argument('--num_threads', default=4, type=int, help='# threads for loading data')
+        parser.add_argument('--serial_batches', action='store_true', default=True, help='if true, takes images in order to make batches, otherwise takes them randomly')
+        parser.add_argument('--num_threads', default=2, type=int, help='# threads for loading data')
         parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
-        parser.add_argument('--load_size', type=int, default=286, help='scale images to this size')
-        parser.add_argument('--crop_size', type=int, default=256, help='then crop to this size')
+        parser.add_argument('--load_size', type=int, default=480, help='scale images to this size') # HD image width = 1920 (/4 = 480)
+        # parser.add_argument('--crop_size', type=int, default=268, help='then crop to this size')    # HD image height = 1080 (/4 = 270)
+        parser.add_argument('--crop_size_width', type=int, default=420, help='then crop the width to this size')
+        parser.add_argument('--crop_size_height', type=int, default=252, help='then crop the height to this size')
+        parser.add_argument('--org_image_height', type=int, default=1080, help='scale images to this size')
+        parser.add_argument('--org_image_width', type=int, default=1920, help='then crop to this size')
         parser.add_argument('--max_dataset_size', type=int, default=float("inf"), help='Maximum number of samples allowed per dataset. If the dataset directory contains more than max_dataset_size, only a subset is loaded.')
-        parser.add_argument('--preprocess', type=str, default='resize_and_crop', help='scaling and cropping of images at load time [resize_and_crop | crop | scale_width | scale_width_and_crop | none]')
+        parser.add_argument('--preprocess', type=str, default='scale_width_and_crop', help='scaling and cropping of images at load time [resize_and_crop | crop | scale_width | scale_width_and_crop | none]')
         parser.add_argument('--no_flip', action='store_true', help='if specified, do not flip the images for data augmentation')
+        parser.add_argument('--use_aug', action='store_true', help='if specified, apply data augmentation')
         parser.add_argument('--display_winsize', type=int, default=256, help='display window size for both visdom and HTML')
         # additional parameters
         parser.add_argument('--epoch', type=str, default='latest', help='which epoch to load? set to latest to use latest cached model')
         parser.add_argument('--load_iter', type=int, default='0', help='which iteration to load? if load_iter > 0, the code will load models by iter_[load_iter]; otherwise, the code will load models by [epoch]')
         parser.add_argument('--verbose', action='store_true', help='if specified, print more debugging information')
         parser.add_argument('--suffix', default='', type=str, help='customized suffix: opt.name = opt.name + suffix: e.g., {model}_{netG}_size{load_size}')
+
+        parser.add_argument('--pose_3d_config',
+                            default='./pose_3d_model/config/cmu_panoptic_alg.yaml',
+                            type=str,
+                            help='path to 3D pose config')
+
+        parser.add_argument('--view_name0', type=str, default='00_00', help='the name of view 0')
+        parser.add_argument('--view_name1', type=str, default='00_24', help='the name of view 1')
+
+        parser.add_argument('--dataroot', type=str, default='./cmu-panoptic/subsets/171204_pose1',
+                            help='path to images (should have subfolders trainA, trainB, valA, valB, etc)')
+        parser.add_argument('--personA', type=str, default='pose1_personA', help='the name of person A')
+        parser.add_argument('--personB', type=str, default='pose1_personD', help='the name of person B')
+        parser.add_argument('--calibration_file_A', type=str, default='calibration_171204_pose1.json',
+                            help='the camera calibraion file name for person A')
+        parser.add_argument('--calibration_file_B', type=str, default='calibration_171204_pose1.json',
+                            help='the camera calibraion file name for person B')
+        parser.add_argument('--height_ref_frame_A', type=str, default='body3DScene_00000300.json', help='')
+        parser.add_argument('--height_ref_frame_B', type=str, default='body3DScene_00014150.json', help='')
+
+
         self.initialized = True
         return parser
 
@@ -129,8 +153,6 @@ class BaseOptions():
             id = int(str_id)
             if id >= 0:
                 opt.gpu_ids.append(id)
-        if len(opt.gpu_ids) > 0:
-            torch.cuda.set_device(opt.gpu_ids[0])
 
         self.opt = opt
         return self.opt

@@ -8,6 +8,7 @@ import torch.utils.data as data
 
 from PIL import Image
 import os
+import os.path
 
 IMG_EXTENSIONS = [
     '.jpg', '.JPG', '.jpeg', '.JPEG',
@@ -20,13 +21,20 @@ def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
 
-def make_dataset(dir, max_dataset_size=float("inf")):
+def is_json_file(filename):
+    return filename.endswith('json')
+
+
+'''
+file_selector - A method that selects which files under the given directory to kiad inti the generated dataset
+'''
+def make_dataset(dir, max_dataset_size=float("inf"), file_selector=is_image_file):
     images = []
     assert os.path.isdir(dir), '%s is not a valid directory' % dir
 
     for root, _, fnames in sorted(os.walk(dir)):
         for fname in fnames:
-            if is_image_file(fname):
+            if file_selector(fname):
                 path = os.path.join(root, fname)
                 images.append(path)
     return images[:min(max_dataset_size, len(images))]
@@ -43,7 +51,8 @@ class ImageFolder(data.Dataset):
         imgs = make_dataset(root)
         if len(imgs) == 0:
             raise(RuntimeError("Found 0 images in: " + root + "\n"
-                               "Supported image extensions are: " + ",".join(IMG_EXTENSIONS)))
+                               "Supported image extensions are: " +
+                               ",".join(IMG_EXTENSIONS)))
 
         self.root = root
         self.imgs = imgs

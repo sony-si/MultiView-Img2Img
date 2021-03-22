@@ -15,7 +15,7 @@ class BaseModel(ABC):
         -- <modify_commandline_options>:    (optionally) add model-specific options and set default options.
     """
 
-    def __init__(self, opt):
+    def __init__(self, opt, rank=0):
         """Initialize the BaseModel class.
 
         Parameters:
@@ -32,7 +32,8 @@ class BaseModel(ABC):
         self.opt = opt
         self.gpu_ids = opt.gpu_ids
         self.isTrain = opt.isTrain
-        self.device = torch.device('cuda:{}'.format(self.gpu_ids[0])) if self.gpu_ids else torch.device('cpu')  # get device name: CPU or GPU
+        self.rank = rank
+        self.device = torch.device('cuda:{}'.format(self.rank) if self.gpu_ids else torch.device('cpu'))  # get device name: CPU or GPU
         self.save_dir = os.path.join(opt.checkpoints_dir, opt.name)  # save all the checkpoints to save_dir
         if opt.preprocess != 'scale_width':  # with [scale_width], input images might have different sizes, which hurts the performance of cudnn.benchmark.
             torch.backends.cudnn.benchmark = True
@@ -84,9 +85,11 @@ class BaseModel(ABC):
         if self.isTrain:
             self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
         if not self.isTrain or opt.continue_train:
-            load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
-            self.load_networks(load_suffix)
-        self.print_networks(opt.verbose)
+            if self.rank == 0:
+                load_suffix = 'iter_%d' % opt.load_iter if opt.load_iter > 0 else opt.epoch
+                self.load_networks(load_suffix)
+        if self.rank == 0:
+            self.print_networks(opt.verbose)
 
     def eval(self):
         """Make models eval mode during test time"""
@@ -115,7 +118,6 @@ class BaseModel(ABC):
 
     def update_learning_rate(self):
         """Update learning rates for all the networks; called at the end of every epoch"""
-        old_lr = self.optimizers[0].param_groups[0]['lr']
         for scheduler in self.schedulers:
             if self.opt.lr_policy == 'plateau':
                 scheduler.step(self.metric)
@@ -123,7 +125,7 @@ class BaseModel(ABC):
                 scheduler.step()
 
         lr = self.optimizers[0].param_groups[0]['lr']
-        print('learning rate %.7f -> %.7f' % (old_lr, lr))
+        print('learning rate = %.7f' % lr)
 
     def get_current_visuals(self):
         """Return visualization images. train.py will display these images with visdom, and save the images to a HTML"""
@@ -154,8 +156,7 @@ class BaseModel(ABC):
                 net = getattr(self, 'net' + name)
 
                 if len(self.gpu_ids) > 0 and torch.cuda.is_available():
-                    torch.save(net.module.cpu().state_dict(), save_path)
-                    net.cuda(self.gpu_ids[0])
+                    torch.save(net.module.state_dict(), save_path)
                 else:
                     torch.save(net.cpu().state_dict(), save_path)
 
@@ -184,7 +185,7 @@ class BaseModel(ABC):
                 load_filename = '%s_net_%s.pth' % (epoch, name)
                 load_path = os.path.join(self.save_dir, load_filename)
                 net = getattr(self, 'net' + name)
-                if isinstance(net, torch.nn.DataParallel):
+                if isinstance(net, torch.nn.parallel.DistributedDataParallel):
                     net = net.module
                 print('loading the model from %s' % load_path)
                 # if you are using PyTorch newer than 0.4 (e.g., built from

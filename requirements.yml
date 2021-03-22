@@ -1,0 +1,23 @@
+name: img2img_env
+channels:
+  - conda-forge
+  - anaconda
+  - pytorch
+dependencies:
+  - imageio==2.5.0
+  - matplotlib==3.1.1
+  - numpy==1.17.2
+  - opencv
+  - protobuf==3.10.0
+  - scipy==1.2.0
+  - tensorboardX==1.8
+  - cudatoolkit==10.1.243
+  - torchvision=0.6.0
+  - pytorch=1.5.0=py3.7_cuda10.1.243_cudnn7.6.3_0
+  - pandas
+  - tqdm
+  - scikit-image
+  - dominate
+  - tensorflow
+  - visdom
+  - easydict==1.9
