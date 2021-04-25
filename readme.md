@@ -17,11 +17,11 @@ pip install requirements.txt
 ```
 Download a 3D pose estimation model from the [learnable-triangulation-pytorch](http://github.com/karfly/learnable-triangulation-pytorch/) github.
 
-##Train
+## Train
 ```
 python train.py --use_aug --gpu_ids 0,1,2,3 --name train_experiment_name --model cycle_3Dpose_gan
 ```
-##Evaluation
+## Evaluation
 ```
 python test.py --gpu_id 3 --view view0 --dataroot ./cmu-panoptic/subsets/171026_pose1_pose2/00_00/personA/ --name cmu_171026_pose1_dual_view/view0  --model_suffix "_A" --model test --num_test 6000 --no_dropout
 ```
